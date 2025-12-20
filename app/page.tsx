@@ -178,6 +178,27 @@ export default async function Home(props: { searchParams: Promise<{ v?: string }
               </div>
             </div>
           </Link>
+
+          {/* Card 4 - Tree View (New) */}
+          <Link href="/tree-view" className="group">
+            <div className="h-full bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer flex flex-col space-y-4 relative overflow-hidden hover:border-purple-200">
+              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity text-purple-500">
+                <ListTree size={64} />
+              </div>
+              <div className="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center group-hover:bg-purple-100 transition-colors">
+                <ListTree size={24} className="text-purple-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Tree View (New)</h2>
+                <p className="text-gray-500 mt-2 text-sm leading-relaxed">
+                  Hierarchical tree view with "Epic {'>'} Feature {'>'} Task" structure.
+                </p>
+              </div>
+              <div className="mt-auto pt-4 flex items-center text-purple-600 font-semibold text-sm">
+                View <ArrowRight size={16} className="ml-2 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+          </Link>
         </div>
       </div>
     </main>

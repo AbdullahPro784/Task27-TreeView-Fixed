@@ -237,34 +237,70 @@ export default function TableVariant1({ data: initialData }: { data: Asset[] }) 
         {
             accessorKey: "id",
             header: "Asset ID",
-            cell: ({ row, getValue }) => (
-                <div className="px-4 py-3 h-full flex items-center gap-2">
-                    {/* Move expander here for better tree visualization */}
-                    {row.getCanExpand() && (
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                row.toggleExpanded();
-                            }}
-                            className="p-1 hover:bg-gray-200 rounded cursor-pointer transition-transform"
-                        >
-                            {row.getIsExpanded() ? (
-                                <ChevronDown size={16} className="text-gray-500" />
-                            ) : (
-                                <ChevronRight size={16} className="text-gray-500" />
+            cell: ({ row, getValue, table }) => {
+                const guides = [];
+                let current = row.getParentRow();
+                while (current) {
+                    const parent = current.getParentRow();
+                    const siblings = parent ? parent.original.subRows : table.options.data;
+                    const index = siblings?.findIndex((s: Asset) => s.id === current?.original.id) ?? 0;
+                    const isLast = index === (siblings?.length ?? 0) - 1;
+                    guides.unshift(isLast ? "space" : "line");
+                    current = parent;
+                }
+
+                const parent = row.getParentRow();
+                const siblings = parent ? parent.original.subRows : table.options.data;
+                const index = siblings?.findIndex((s: Asset) => s.id === row.original.id) ?? 0;
+                const isLast = index === (siblings?.length ?? 0) - 1;
+                const connector = isLast ? "last" : "entry";
+
+                return (
+                    <div className="flex items-stretch h-full">
+                        <div className="flex items-stretch shrink-0 font-mono">
+                            {guides.map((type, i) => (
+                                <div key={i} className="w-5 flex justify-center relative" style={{ minWidth: '20px' }}>
+                                    {type === "line" && (
+                                        <div className="absolute top-0 bottom-0 w-px bg-blue-300 left-1/2"></div>
+                                    )}
+                                </div>
+                            ))}
+                            {row.depth > 0 && (
+                                <div className="w-5 flex justify-center relative" style={{ minWidth: '20px' }}>
+                                    <div className="absolute top-0 bottom-1/2 left-1/2 w-px bg-blue-300"></div>
+                                    {connector === "last" ? (
+                                        <div className="absolute top-1/2 left-1/2 w-1/2 h-1/2 border-l border-b border-blue-300 rounded-bl-lg -translate-x-px"></div>
+                                    ) : (
+                                        <>
+                                            <div className="absolute top-1/2 bottom-0 left-1/2 w-px bg-blue-300"></div>
+                                            <div className="absolute top-1/2 left-1/2 w-1/2 h-px bg-blue-300"></div>
+                                        </>
+                                    )}
+                                </div>
                             )}
-                        </button>
-                    )}
-                    {/* If strictly indenting this column, we could add padding here instead of the checkbox column, 
-                        but usually tree views indent the whole row visually or the leading column. 
-                        Let's keep indentation in the checkbox column or move checkbox after expander? 
-                        The prompt asks for "image 1" style. Image 1 has:
-                        [Expander] [Checkbox] [Content] or [Checkbox] [Expander] [Content]?
-                        Actually Image 1 shows [Level 1 Item] -> [Level 2 Item] indented below it.
-                    */}
-                    {getValue() as string}
-                </div>
-            ),
+                        </div>
+
+                        <div className="flex items-center gap-2 pl-1 py-2 w-full min-w-0">
+                            {row.getCanExpand() && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        row.toggleExpanded();
+                                    }}
+                                    className="p-1 hover:bg-blue-50 rounded cursor-pointer transition-transform text-blue-500"
+                                >
+                                    {row.getIsExpanded() ? (
+                                        <ChevronDown size={16} />
+                                    ) : (
+                                        <ChevronRight size={16} />
+                                    )}
+                                </button>
+                            )}
+                            {getValue() as string}
+                        </div>
+                    </div>
+                );
+            },
             size: 100,
         },
         {
@@ -623,12 +659,14 @@ export default function TableVariant1({ data: initialData }: { data: Asset[] }) 
                                             )}
                                         >
                                             {row.getVisibleCells().map((cell) => {
-                                                const indentation = cell.column.id === "id" ? row.depth * 20 : 0;
                                                 return (
-                                                    <td key={cell.id} style={{ width: cell.column.getSize() }} className="p-0 py-3 text-gray-700">
+                                                    <td
+                                                        key={cell.id}
+                                                        style={{ width: cell.column.getSize() }}
+                                                        className={cn("text-gray-700 align-middle", cell.column.id === "id" ? "p-0" : "py-3")}
+                                                    >
                                                         <div
-                                                            className="truncate w-full px-4"
-                                                            style={{ paddingLeft: indentation ? `${indentation + 16}px` : undefined }}
+                                                            className={cn("truncate w-full", cell.column.id === "id" ? "p-0" : "px-4")}
                                                             title={cell.getValue() as string}
                                                         >
                                                             {flexRender(cell.column.columnDef.cell, cell.getContext())}

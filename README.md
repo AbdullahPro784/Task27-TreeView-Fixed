@@ -6,9 +6,11 @@ A powerful, high-performance data grid application built with **Next.js 14**, **
 
 -   **Advanced Data Grid**: Built on TanStack Table for headless, performant state management.
 -   **Tree Grid & Grouping**: Support for nested sub-rows (tree view) to display hierarchical asset data.
--   **Drag & Drop**:
+-   **Drag & Drop Ecosystem**:
+    -   **Reorder Sorting**: Drag items between rows to reorder them; numbering (e.g., 1.1, 1.2) updates automatically.
+    -   **Smart Grouping**: Drag an item **onto** another to create a new Group node containing both items.
     -   **Column Reordering**: Intuitive column drag-and-drop using `@dnd-kit`.
-    -   **Row Reordering**: Reorder rows and sub-items via drag handle.
+-   **Visual Guides**: Clear, continuous blue indentation lines for tracking complex hierarchies.
 -   **Sub-item Management**: easily add, edit, and organize sub-tasks directly within the grid.
 -   **Advanced Filtering**:
     -   **Summary Cards**: Filter by status (In Process, Delayed, Closed) with one click.
@@ -20,6 +22,7 @@ A powerful, high-performance data grid application built with **Next.js 14**, **
     -   **Variation 1**: Indented tree view.
     -   **Variation 2**: Nested grid with guide lines.
     -   **Variation 3**: Master-Detail panel view.
+    -   **Tree View**: Dedicated, highly visual hierarchical view with advanced spacing and connectors.
 -   **Editable Cells**: Inline editing capabilities for quick data updates.
 -   **Smart Status Logic**: Automatically highlights overdue items and visualizes status states.
 
@@ -42,15 +45,19 @@ Choose between different table visualizations to best suit your data needs.
 Standard indented hierarchy for clear parent-child relationships.
 ![Variation 1](screenshots/preview2.png)
 
-### 3. Variation 2: Nested Grid
+### 3. Tree View (New)
+Advanced hierarchical view with continuous visual guides and smart grouping capabilities.
+![Tree View](screenshots/tree_view_preview.png)
+
+### 4. Variation 2: Nested Grid
 Structured grid layout with visual guides for deep nesting.
 ![Variation 2](screenshots/preview3.png)
 
-### 4. Variation 3: Master-Detail Panels
+### 5. Variation 3: Master-Detail Panels
 Full-width sub-panels for expanding detailed asset information.
 ![Variation 3](screenshots/preview4.png)
 
-### 5. Original Variant with Advanced Filters
+### 6. Original Variant with Advanced Filters
 The core implementation featuring the new **Summary Cards**, **Search Filter Bar**, and **Pagination**.
 ![Original Variant](screenshots/preview5.png)
 

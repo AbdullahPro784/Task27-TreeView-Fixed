@@ -1,17 +1,18 @@
 "use client";
 
 import React, { useState } from "react";
-import { ArrowLeft, LayoutList, ListTree, TableProperties, FileText } from "lucide-react";
+import { ArrowLeft, LayoutList, ListTree, TableProperties, FileText, GitGraph } from "lucide-react";
 import AssetTable from "./AssetTable";
 import TableVariant1 from "./variations/TableVariant1";
 import TableVariant2 from "./variations/TableVariant2";
 import TableVariant3 from "./variations/TableVariant3";
+import TreeTable from "./TreeTable";
 import { Asset } from "./data";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-type Variant = "original" | "v1" | "v2" | "v3";
+type Variant = "original" | "v1" | "v2" | "v3" | "tree";
 
 interface TableExplorerProps {
     data: Asset[];
@@ -42,6 +43,8 @@ export default function TableExplorer({ data, initialVariant }: TableExplorerPro
                 return <TableVariant2 data={data} />;
             case "v3":
                 return <TableVariant3 data={data} />;
+            case "tree":
+                return <TreeTable />;
             default:
                 return <AssetTable data={data} />;
         }
@@ -52,6 +55,7 @@ export default function TableExplorer({ data, initialVariant }: TableExplorerPro
         { id: "v1", label: "Variation 1 (Indented)", icon: ListTree },
         { id: "v2", label: "Variation 2 (Nested)", icon: LayoutList },
         { id: "v3", label: "Variation 3 (Panel)", icon: TableProperties },
+        { id: "tree", label: "Tree View", icon: GitGraph },
     ] as const;
 
     return (
@@ -63,13 +67,13 @@ export default function TableExplorer({ data, initialVariant }: TableExplorerPro
                 >
                     <ArrowLeft size={16} /> Back to Home
                 </Link>
-                <div className="flex bg-gray-100 p-1 rounded-lg">
+                <div className="flex bg-gray-100 p-1 rounded-lg overflow-x-auto">
                     {tabs.map((tab) => (
                         <button
                             key={tab.id}
-                            onClick={() => handleVariantChange(tab.id)}
+                            onClick={() => handleVariantChange(tab.id as Variant)}
                             className={cn(
-                                "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
+                                "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap",
                                 currentVariant === tab.id
                                     ? "bg-white text-gray-900 shadow-sm"
                                     : "text-gray-500 hover:text-gray-900 hover:bg-gray-200"
