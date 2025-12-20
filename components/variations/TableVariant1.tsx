@@ -26,16 +26,20 @@ import {
     useSensor,
     useSensors,
     DragEndEvent,
+    DragOverlay, // Added
+    DragStartEvent, // Added
 } from "@dnd-kit/core";
+import { createPortal } from "react-dom"; // Added
 import {
     arrayMove,
     SortableContext,
     horizontalListSortingStrategy,
+    verticalListSortingStrategy,
     useSortable,
     sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
+import { restrictToHorizontalAxis, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
     ChevronDown,
     ChevronUp,
@@ -63,6 +67,7 @@ import { Button } from "@/components/ui/button";
 import { Asset, AssetStatus, DATA } from "../data";
 import { cn } from "@/lib/utils";
 import { DraggableTableHeader } from "../DraggableTableHeader";
+import { DraggableRow } from "../DraggableRow";
 import { EditableCell } from "../EditableCell";
 
 import AddItemModal from "../AddItemModal";
@@ -78,13 +83,68 @@ export default function TableVariant1({ data: initialData }: { data: Asset[] }) 
         return Array.from(categories).sort();
     }, []);
 
-    const [data, setData] = useState(initialData);
+    // Helper to find item and its parent in the tree
+    const findItemPath = (items: Asset[], id: string): { parent: Asset | null, index: number, array: Asset[] } | null => {
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].id === id) {
+                return { parent: null, index: i, array: items };
+            }
+            if (items[i].subRows) {
+                const result = findItemPath(items[i].subRows!, id);
+                if (result) {
+                    // path found in subRows
+                    if (result.parent === null) {
+                        // direct child of this item
+                        return { parent: items[i], index: result.index, array: items[i].subRows! };
+                    }
+                    return result;
+                }
+            }
+        }
+        return null;
+    };
+
+    const [data, setData] = useState(() => {
+        // Try to load full data structure from local storage
+        if (typeof window !== "undefined") {
+            const savedData = localStorage.getItem("assetTableData_v1"); // Use new key for full data
+            if (savedData) {
+                try {
+                    // We assume the saved data is the full hierarchical structure
+                    const parsed = JSON.parse(savedData);
+                    if (Array.isArray(parsed)) return parsed;
+                } catch (e) {
+                    console.error("Failed to parse saved data", e);
+                }
+            }
+            // Fallback: check for old row order (migration path, optional)
+            const savedOrder = localStorage.getItem("assetTableRowOrder_v1");
+            if (savedOrder) {
+                try {
+                    const orderIds = JSON.parse(savedOrder) as string[];
+                    const orderMap = new Map(orderIds.map((id, index) => [id, index]));
+                    const sorted = [...initialData].sort((a, b) => {
+                        const indexA = orderMap.get(a.id) ?? Infinity;
+                        const indexB = orderMap.get(b.id) ?? Infinity;
+                        return indexA - indexB;
+                    });
+                    return sorted;
+                } catch (e) { }
+            }
+        }
+        return initialData;
+    });
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isColumnsMenuOpen, setIsColumnsMenuOpen] = useState(false);
 
     useEffect(() => {
         setIsMounted(true);
     }, []);
+
+    // Save full data structure to local storage whenever it changes
+    useEffect(() => {
+        localStorage.setItem("assetTableData_v1", JSON.stringify(data));
+    }, [data]);
 
     const [sorting, setSorting] = useState<SortingState>([]);
     const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -101,20 +161,31 @@ export default function TableVariant1({ data: initialData }: { data: Asset[] }) 
         "status",
     ]);
     const [rowSelection, setRowSelection] = useState({});
-    const [expanded, setExpanded] = useState<ExpandedState>(true); // Default expand all for demo
+    const [expanded, setExpanded] = useState<ExpandedState>(true);
+    const [columnSizing, setColumnSizing] = useState({});
 
-    // Load column order from local storage
+    // Load column order and sizing from local storage
     useEffect(() => {
-        const savedOrder = localStorage.getItem("assetTableColumnOrder_v1");
-        if (savedOrder) {
-            try {
-                const parsedOrder = JSON.parse(savedOrder);
-                if (!parsedOrder.includes("select")) {
-                    parsedOrder.unshift("select");
+        if (typeof window !== "undefined") {
+            const savedOrder = localStorage.getItem("assetTableColumnOrder_v1");
+            if (savedOrder) {
+                try {
+                    const parsedOrder = JSON.parse(savedOrder);
+                    if (!parsedOrder.includes("select")) {
+                        parsedOrder.unshift("select");
+                    }
+                    setColumnOrder(parsedOrder);
+                } catch (e) {
+                    console.error("Failed to parse column order", e);
                 }
-                setColumnOrder(parsedOrder);
-            } catch (e) {
-                console.error("Failed to parse column order", e);
+            }
+            const savedSizing = localStorage.getItem("assetTableColumnSizing_v1");
+            if (savedSizing) {
+                try {
+                    setColumnSizing(JSON.parse(savedSizing));
+                } catch (e) {
+                    console.error("Failed to parse column sizing", e);
+                }
             }
         }
     }, []);
@@ -123,6 +194,17 @@ export default function TableVariant1({ data: initialData }: { data: Asset[] }) 
     useEffect(() => {
         localStorage.setItem("assetTableColumnOrder_v1", JSON.stringify(columnOrder));
     }, [columnOrder]);
+
+    // Save column sizing to local storage
+    useEffect(() => {
+        localStorage.setItem("assetTableColumnSizing_v1", JSON.stringify(columnSizing));
+    }, [columnSizing]);
+
+    // Save row order to local storage
+    useEffect(() => {
+        const rowIds = data.map(item => item.id);
+        localStorage.setItem("assetTableRowOrder_v1", JSON.stringify(rowIds));
+    }, [data]);
 
     const columns = React.useMemo<ColumnDef<Asset>[]>(() => [
         {
@@ -276,6 +358,7 @@ export default function TableVariant1({ data: initialData }: { data: Asset[] }) 
             columnVisibility,
             globalFilter,
             expanded,
+            columnSizing,
         },
         onSortingChange: setSorting,
         onColumnFiltersChange: setColumnFilters,
@@ -283,6 +366,7 @@ export default function TableVariant1({ data: initialData }: { data: Asset[] }) 
         onColumnVisibilityChange: setColumnVisibility,
         onColumnOrderChange: setColumnOrder,
         onRowSelectionChange: setRowSelection,
+        onColumnSizingChange: setColumnSizing,
         onExpandedChange: setExpanded,
         getCoreRowModel: getCoreRowModel(),
         getSortedRowModel: getSortedRowModel(),
@@ -293,6 +377,8 @@ export default function TableVariant1({ data: initialData }: { data: Asset[] }) 
         autoResetPageIndex: false,
         enableRowSelection: true,
         enableMultiRowSelection: true,
+        columnResizeMode: "onChange",
+        enableColumnResizing: true,
         meta: {
             updateData: async (itemId: string, columnId: string, value: any) => {
                 // ... (Keep existing update logic)
@@ -322,20 +408,140 @@ export default function TableVariant1({ data: initialData }: { data: Asset[] }) 
     };
 
     const sensors = useSensors(
-        useSensor(PointerSensor),
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8,
+            },
+        }),
         useSensor(KeyboardSensor, {
             coordinateGetter: sortableKeyboardCoordinates,
         })
     );
 
+    const [activeId, setActiveId] = useState<string | null>(null);
+    const [activeItem, setActiveItem] = useState<Asset | null>(null);
+
+    function handleDragStart(event: DragStartEvent) {
+        setActiveId(event.active.id as string);
+        const currentActive = event.active;
+        if (currentActive.data.current?.type === 'row') {
+            // Use helper to find item recursively
+            const path = findItemPath(data, currentActive.id as string);
+            if (path) {
+                const item = path.array[path.index];
+                setActiveItem(item);
+            }
+        }
+    }
+
     function handleDragEnd(event: DragEndEvent) {
         const { active, over } = event;
-        if (active && over && active.id !== over.id) {
-            setColumnOrder((order) => {
-                const oldIndex = order.indexOf(active.id as string);
-                const newIndex = order.indexOf(over.id as string);
-                return arrayMove(order, oldIndex, newIndex);
-            });
+        setActiveId(null);
+        setActiveItem(null);
+        if (!over) return;
+
+        if (active.id !== over.id) {
+            const activeType = active.data.current?.type;
+
+            if (activeType === "column") {
+                setColumnOrder((order) => {
+                    const oldIndex = order.indexOf(active.id as string);
+                    const newIndex = order.indexOf(over.id as string);
+                    return arrayMove(order, oldIndex, newIndex);
+                });
+            } else if (activeType === "row") {
+                setData((prevData) => {
+                    const activePath = findItemPath(prevData, active.id as string);
+                    const overPath = findItemPath(prevData, over.id as string);
+
+                    if (!activePath || !overPath) return prevData;
+
+                    // Only allow reordering within the same parent (same level)
+                    // We check if the arrays are the same reference (or same parent ID)
+                    // Since we return the array ref in findItemPath, we can compare arrays directly, 
+                    // but checking parent ID is safer for logic if arrays were cloned.
+                    let effectiveOverPath = overPath;
+                    let effectiveNewIndex = overPath.index;
+                    let isProjected = false;
+
+                    const sameParent = activePath.array === overPath.array;
+
+                    if (!sameParent) {
+                        // Check if 'over' is a descendant of a sibling of 'active'
+                        // We need to traverse up from 'over' until we find an item that is in 'activePath.array'
+
+                        let current = overPath.parent;
+                        while (current) {
+                            if (activePath.array.includes(current)) {
+                                // Found the ancestor that is a sibling of active
+                                effectiveOverPath = {
+                                    parent: null, // We don't need this for the array check below as we use activePath.array
+                                    index: activePath.array.indexOf(current),
+                                    array: activePath.array
+                                };
+                                effectiveNewIndex = effectiveOverPath.index;
+                                isProjected = true;
+                                break;
+                            }
+                            // Move up
+                            // We need to find the parent of 'current'.
+                            // Since our findItemPath is top-down, we might need to re-search or be smarter.
+                            // Re-search is expensive but safe.
+                            const parentPath = findItemPath(prevData, current.id);
+                            if (parentPath && parentPath.parent) {
+                                current = parentPath.parent;
+                            } else if (parentPath && parentPath.parent === null) {
+                                // current is root, but we already checked activePath.array.includes(current) if active is root
+                                // If active is NOT root, but we reached root, then we can't project.
+                                if (activePath.array === prevData) {
+                                    // active is root, current is root.
+                                    // This should have been caught by includes check if they are same array.
+                                    break;
+                                }
+                                break;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+
+                    // Re-check if we can move now
+                    if (activePath.array === effectiveOverPath.array) {
+                        const oldIndex = activePath.index;
+                        const newIndex = effectiveNewIndex;
+
+                        // We need to clone the tree to mutate it immutably
+                        const newData = [...prevData];
+
+                        // Helper to recursively update the specific array
+                        const updateRecursive = (items: Asset[]): Asset[] => {
+                            // If this is the array we want to update
+                            if (items === activePath.array) {
+                                return arrayMove(items, oldIndex, newIndex);
+                            }
+
+                            return items.map(item => {
+                                if (item.subRows) {
+                                    const updatedSubRows = updateRecursive(item.subRows);
+                                    if (updatedSubRows !== item.subRows) {
+                                        return { ...item, subRows: updatedSubRows };
+                                    }
+                                }
+                                return item;
+                            });
+                        };
+
+                        // If it's the top level array
+                        if (activePath.parent === null) {
+                            return arrayMove(prevData, oldIndex, newIndex);
+                        }
+
+                        return updateRecursive(newData);
+                    }
+
+                    return prevData;
+                });
+            }
         }
     }
 
@@ -366,7 +572,8 @@ export default function TableVariant1({ data: initialData }: { data: Asset[] }) 
 
             <DndContext
                 collisionDetection={closestCenter}
-                modifiers={[restrictToHorizontalAxis]}
+                // modifiers={[restrictToHorizontalAxis]}
+                onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
                 sensors={sensors}
             >
@@ -386,34 +593,80 @@ export default function TableVariant1({ data: initialData }: { data: Asset[] }) 
                                 </tr>
                             ))}
                         </thead>
-                        <tbody>
-                            {table.getRowModel().rows.map((row) => {
-                                return (
-                                    <tr
-                                        key={row.id}
-                                        onClick={() => row.toggleSelected()}
-                                        className={cn(
-                                            "border-b border-gray-100 cursor-pointer transition-colors",
-                                            "hover:bg-slate-50",
-                                            row.getIsSelected() ? "bg-opacity-90 ring-1 ring-inset ring-orange-400" : "",
-                                            "h-16"
-                                        )}
-                                    >
-                                        {row.getVisibleCells().map((cell) => (
-                                            <td key={cell.id} className={cn("p-0 text-gray-700")}>
-                                                {/* Apply padding to the FIRST cell in the row for indentation effect if we want full row indentation, 
-                                                    OR rely on the cell renderer specific padding I added above to the 'select' column. 
-                                                    Let's rely on the cell renderer logic.
-                                                */}
-                                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                            </td>
-                                        ))}
-                                    </tr>
-                                );
-                            })}
+                        <tbody className="divide-y divide-gray-100">
+                            {/* Note: In a Tree Data table, dnd-kit vertical sorting with random sub-rows is tricky because rows render recursively.
+                                 TanStack Table flattens them for us if we use `getRowModel()`.
+                                 However, `data.map` in SortableContext items must match the rendered rows order??
+                                 Actually, `SortableContext` needs the IDs of the items being rendered.
+                                 If we render `table.getRowModel().rows`, we should pass those IDs to `SortableContext`.
+                             */}
+                            <SortableContext
+                                items={table.getRowModel().rows.map(row => row.original.id)}
+                                strategy={verticalListSortingStrategy}
+                            >
+                                {table.getRowModel().rows.map((row) => {
+                                    return (
+                                        <DraggableRow
+                                            key={row.id}
+                                            rowId={row.original.id} // Use original ID for handling data update? OR row.id (which might be hierarchical)? data update uses original ID.
+                                            // DraggableRow uses ID for Sortable. SortableContext must match.
+                                            // If row.id is "0.1", but our data has "id-123", we need to align.
+                                            // Tanstack uses index by default if no getRowId. We provided getRowId = row.id.
+                                            // So row.id is the asset ID. Excellent.
+
+                                            onClick={() => row.toggleSelected()}
+                                            className={cn(
+                                                "border-b border-gray-100 cursor-pointer transition-colors",
+                                                "hover:bg-slate-50",
+                                                row.getIsSelected() ? "bg-opacity-90 ring-1 ring-inset ring-orange-400" : "",
+                                                "h-16"
+                                            )}
+                                        >
+                                            {row.getVisibleCells().map((cell) => {
+                                                const indentation = cell.column.id === "id" ? row.depth * 20 : 0;
+                                                return (
+                                                    <td key={cell.id} style={{ width: cell.column.getSize() }} className="p-0 py-3 text-gray-700">
+                                                        <div
+                                                            className="truncate w-full px-4"
+                                                            style={{ paddingLeft: indentation ? `${indentation + 16}px` : undefined }}
+                                                            title={cell.getValue() as string}
+                                                        >
+                                                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                                        </div>
+                                                    </td>
+                                                );
+                                            })}
+                                        </DraggableRow>
+                                    );
+                                })}
+                            </SortableContext>
                         </tbody>
                     </table>
                 </div>
+                {/* Drag Overlay Portal */}
+                {typeof window !== "undefined" && createPortal(
+                    <DragOverlay adjustScale={true}>
+                        {activeId ? (
+                            <div className="opacity-90 shadow-2xl cursor-grabbing transform rotate-2 bg-white border border-blue-500 rounded-md overflow-hidden">
+                                {/* Render simplified row or column preview */}
+                                {activeItem ? (
+                                    <div className="flex items-center h-14 px-4 bg-gray-50 text-sm font-medium text-gray-700">
+                                        <div className="flex gap-4">
+                                            <span className="font-bold">{activeItem.id}</span>
+                                            <span>{activeItem.vehicle}</span>
+                                            <span className="text-gray-400">{activeItem.category}</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="px-4 py-3 bg-gray-100 font-bold text-gray-700 border-b-2 border-blue-500">
+                                        {activeId}
+                                    </div>
+                                )}
+                            </div>
+                        ) : null}
+                    </DragOverlay>,
+                    document.body
+                )}
             </DndContext>
         </div>
     );

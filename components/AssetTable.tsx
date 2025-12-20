@@ -27,16 +27,20 @@ import {
     useSensor,
     useSensors,
     DragEndEvent,
+    DragOverlay, // Added
+    DragStartEvent, // Added
 } from "@dnd-kit/core";
+import { createPortal } from "react-dom";
 import {
     arrayMove,
     SortableContext,
     horizontalListSortingStrategy,
+    verticalListSortingStrategy,
     useSortable,
     sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
+import { restrictToHorizontalAxis, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
     ChevronDown,
     ChevronUp,
@@ -70,6 +74,7 @@ import { Button } from "@/components/ui/button";
 import { Asset, AssetStatus, DATA } from "./data";
 import { cn } from "@/lib/utils";
 import { DraggableTableHeader } from "./DraggableTableHeader";
+import { DraggableRow } from "./DraggableRow";
 import { EditableCell } from "./EditableCell";
 
 import AddItemModal from "./AddItemModal";
@@ -84,7 +89,29 @@ export default function AssetTable({ data: initialData }: { data: Asset[] }) {
         return Array.from(categories).sort();
     }, []);
 
-    const [data, setData] = useState(initialData);
+    const [data, setData] = useState(() => {
+        // Try to load sorted order from local storage
+        if (typeof window !== "undefined") {
+            const savedOrder = localStorage.getItem("assetTableRowOrder");
+            if (savedOrder) {
+                try {
+                    const orderIds = JSON.parse(savedOrder) as string[];
+                    // Sort initialData based on orderIds
+                    // Create a map for O(1) lookup
+                    const orderMap = new Map(orderIds.map((id, index) => [id, index]));
+                    const sorted = [...initialData].sort((a, b) => {
+                        const indexA = orderMap.get(a.id) ?? Infinity;
+                        const indexB = orderMap.get(b.id) ?? Infinity;
+                        return indexA - indexB;
+                    });
+                    return sorted;
+                } catch (e) {
+                    console.error("Failed to parse row order", e);
+                }
+            }
+        }
+        return initialData;
+    });
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isColumnsMenuOpen, setIsColumnsMenuOpen] = useState(false);
 
@@ -108,24 +135,39 @@ export default function AssetTable({ data: initialData }: { data: Asset[] }) {
         "endDate", // Added missing column to order
     ]);
     const [rowSelection, setRowSelection] = useState({});
+    const [columnSizing, setColumnSizing] = useState({}); // New state for column sizing
 
     // New State for Search Filters
     const [statusFilter, setStatusFilter] = useState<string>("All");
     const [durationFilter, setDurationFilter] = useState<string>("All");
     const [summaryFilter, setSummaryFilter] = useState<string | null>(null); // 'delayed', 'in-process', 'closed'
 
-    // Load column order from local storage
+    const [activeId, setActiveId] = useState<string | null>(null);
+    const [activeItem, setActiveItem] = useState<Asset | null>(null);
+
+    // Load column order and sizing from local storage
     useEffect(() => {
-        const savedOrder = localStorage.getItem("assetTableColumnOrder");
-        if (savedOrder) {
-            try {
-                const parsedOrder = JSON.parse(savedOrder);
-                if (!parsedOrder.includes("select")) {
-                    parsedOrder.unshift("select");
+        if (typeof window !== "undefined") {
+            const savedOrder = localStorage.getItem("assetTableColumnOrder");
+            if (savedOrder) {
+                try {
+                    const parsedOrder = JSON.parse(savedOrder);
+                    if (!parsedOrder.includes("select")) {
+                        parsedOrder.unshift("select");
+                    }
+                    setColumnOrder(parsedOrder);
+                } catch (e) {
+                    console.error("Failed to parse column order", e);
                 }
-                setColumnOrder(parsedOrder);
-            } catch (e) {
-                console.error("Failed to parse column order", e);
+            }
+
+            const savedSizing = localStorage.getItem("assetTableColumnSizing");
+            if (savedSizing) {
+                try {
+                    setColumnSizing(JSON.parse(savedSizing));
+                } catch (e) {
+                    console.error("Failed to parse column sizing", e);
+                }
             }
         }
     }, []);
@@ -134,6 +176,17 @@ export default function AssetTable({ data: initialData }: { data: Asset[] }) {
     useEffect(() => {
         localStorage.setItem("assetTableColumnOrder", JSON.stringify(columnOrder));
     }, [columnOrder]);
+
+    // Save column sizing to local storage
+    useEffect(() => {
+        localStorage.setItem("assetTableColumnSizing", JSON.stringify(columnSizing));
+    }, [columnSizing]);
+
+    // Save row order to local storage whenever data changes
+    useEffect(() => {
+        const rowIds = data.map(item => item.id);
+        localStorage.setItem("assetTableRowOrder", JSON.stringify(rowIds));
+    }, [data]);
 
     // Custom Filter Function regarding Status and Summary Cards
     const filterData = useMemo(() => {
@@ -341,6 +394,7 @@ export default function AssetTable({ data: initialData }: { data: Asset[] }) {
             columnFilters,
             columnVisibility,
             globalFilter,
+            columnSizing, // Pass column sizing state
         },
         onSortingChange: setSorting,
         onColumnFiltersChange: setColumnFilters,
@@ -348,6 +402,7 @@ export default function AssetTable({ data: initialData }: { data: Asset[] }) {
         onColumnVisibilityChange: setColumnVisibility,
         onColumnOrderChange: setColumnOrder,
         onRowSelectionChange: setRowSelection,
+        onColumnSizingChange: setColumnSizing,
         getCoreRowModel: getCoreRowModel(),
         getSortedRowModel: getSortedRowModel(),
         getFilteredRowModel: getFilteredRowModel(),
@@ -357,6 +412,8 @@ export default function AssetTable({ data: initialData }: { data: Asset[] }) {
         autoResetPageIndex: false,
         enableRowSelection: true,
         enableMultiRowSelection: true,
+        columnResizeMode: "onChange",
+        enableColumnResizing: true,
         meta: {
             updateData: async (itemId: string, columnId: string, value: any) => {
                 const previousData = [...data];
@@ -404,20 +461,51 @@ export default function AssetTable({ data: initialData }: { data: Asset[] }) {
     };
 
     const sensors = useSensors(
-        useSensor(PointerSensor),
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8,
+            },
+        }),
         useSensor(KeyboardSensor, {
             coordinateGetter: sortableKeyboardCoordinates,
         })
     );
 
+    function handleDragStart(event: DragStartEvent) {
+        setActiveId(event.active.id as string);
+        const currentActive = event.active;
+        if (currentActive.data.current?.type === 'row') {
+            const item = data.find(i => i.id === currentActive.id);
+            setActiveItem(item || null);
+        }
+    }
+
     function handleDragEnd(event: DragEndEvent) {
         const { active, over } = event;
-        if (active && over && active.id !== over.id) {
-            setColumnOrder((order) => {
-                const oldIndex = order.indexOf(active.id as string);
-                const newIndex = order.indexOf(over.id as string);
-                return arrayMove(order, oldIndex, newIndex);
-            });
+        setActiveId(null);
+        setActiveItem(null);
+
+        if (!over) return;
+
+        if (active.id !== over.id) {
+            const activeType = active.data.current?.type;
+
+            if (activeType === "column") {
+                setColumnOrder((order) => {
+                    const oldIndex = order.indexOf(active.id as string);
+                    const newIndex = order.indexOf(over.id as string);
+                    return arrayMove(order, oldIndex, newIndex);
+                });
+            } else if (activeType === "row") {
+                setData((prev) => {
+                    const oldIndex = prev.findIndex((item) => item.id === active.id);
+                    const newIndex = prev.findIndex((item) => item.id === over.id);
+                    if (oldIndex !== -1 && newIndex !== -1) {
+                        return arrayMove(prev, oldIndex, newIndex);
+                    }
+                    return prev;
+                });
+            }
         }
     }
 
@@ -661,7 +749,13 @@ export default function AssetTable({ data: initialData }: { data: Asset[] }) {
 
                 <DndContext
                     collisionDetection={closestCenter}
-                    modifiers={[restrictToHorizontalAxis]}
+                    // modifiers={[restrictToHorizontalAxis]} // Constraint depends on item type, ideally we use different contexts or just allow both axis but filter by type in drag start? 
+                    // To simplify, we can remove global modifiers and rely on SortableContext, OR conditional modifiers.
+                    // But dnd-kit modifiers prop on DndContext applies to all.
+                    // We can retain horizontal for columns and vertical for rows?
+                    // Actually, if we just remove the modifier, it allows free movement, but SortableStrategy constrains it?
+                    // Let's remove global constraint or use a custom one.
+                    // For now, removing restrictToHorizontalAxis to allow row dragging vertically.
                     onDragEnd={handleDragEnd}
                     sensors={sensors}
                 >
@@ -682,50 +776,87 @@ export default function AssetTable({ data: initialData }: { data: Asset[] }) {
                                 ))}
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {table.getRowModel().rows.map((row) => {
-                                    // Highlight logic
-                                    let rowClass = "hover:bg-gray-50/80 bg-white";
-                                    let textClass = "text-gray-600";
+                                <SortableContext
+                                    items={data.map(d => d.id)}
+                                    strategy={verticalListSortingStrategy}
+                                >
+                                    {table.getRowModel().rows.map((row) => {
+                                        // Highlight logic
+                                        let rowClass = "hover:bg-gray-50/80 bg-white";
+                                        let textClass = "text-gray-600";
 
-                                    // Keep original overdue logic styling subtly
-                                    if (row.original.endDate) {
-                                        const end = new Date(row.original.endDate);
-                                        const today = new Date();
-                                        today.setHours(0, 0, 0, 0);
-                                        end.setHours(0, 0, 0, 0);
+                                        // Keep original overdue logic styling subtly
+                                        if (row.original.endDate) {
+                                            const end = new Date(row.original.endDate);
+                                            const today = new Date();
+                                            today.setHours(0, 0, 0, 0);
+                                            end.setHours(0, 0, 0, 0);
 
-                                        const diffTime = end.getTime() - today.getTime();
-                                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                            const diffTime = end.getTime() - today.getTime();
+                                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-                                        if (diffDays < 0) {
-                                            // Passed (Delayed) - Highlight entire row slightly yellow as per image? 
-                                            // Image shows yellow row. Let's replicate that for delayed items.
-                                            rowClass = "bg-amber-500/80 hover:bg-amber-500/90 text-white"; // Yellowish Orange
-                                            textClass = "text-white";
+                                            if (diffDays < 0) {
+                                                // Passed (Delayed) - Highlight entire row slightly yellow as per image? 
+                                                // Image shows yellow row. Let's replicate that for delayed items.
+                                                rowClass = "bg-amber-500/80 hover:bg-amber-500/90 text-white"; // Yellowish Orange
+                                                textClass = "text-white";
+                                            }
                                         }
-                                    }
 
-                                    return (
-                                        <tr
-                                            key={row.id}
-                                            onClick={() => row.toggleSelected()}
-                                            className={cn(
-                                                "transition-colors h-14",
-                                                rowClass,
-                                                row.getIsSelected() && "bg-indigo-50 ring-1 ring-inset ring-indigo-200"
-                                            )}
-                                        >
-                                            {row.getVisibleCells().map((cell) => (
-                                                <td key={cell.id} className={cn("p-0 py-3 first:pl-2", textClass)}>
-                                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                                </td>
-                                            ))}
-                                        </tr>
-                                    );
-                                })}
+                                        return (
+                                            <DraggableRow
+                                                key={row.id}
+                                                rowId={row.original.id}
+                                                onClick={() => row.toggleSelected()}
+                                                className={cn(
+                                                    "transition-colors h-14",
+                                                    rowClass,
+                                                    row.getIsSelected() && "bg-indigo-50 ring-1 ring-inset ring-indigo-200"
+                                                )}
+                                            >
+                                                {row.getVisibleCells().map((cell) => (
+                                                    <td key={cell.id} style={{ width: cell.column.getSize() }} className={cn("p-0 py-3 first:pl-2", textClass)}>
+                                                        <div className="truncate w-full px-2" title={cell.getValue() as string}>
+                                                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                                        </div>
+                                                    </td>
+                                                ))}
+                                            </DraggableRow>
+                                        );
+                                    })}
+                                </SortableContext>
                             </tbody>
                         </table>
                     </div>
+                    {/* Drag Overlay Portal */}
+                    {typeof window !== "undefined" && createPortal(
+                        <DragOverlay adjustScale={true}>
+                            {activeId ? (
+                                <div className="opacity-90 shadow-2xl cursor-grabbing transform rotate-2 bg-white border border-blue-500 rounded-md overflow-hidden">
+                                    {/* Render simplified row or column preview */}
+                                    {activeItem ? (
+                                        <div className="flex items-center h-14 px-4 bg-gray-50 text-sm font-medium text-gray-700">
+                                            {/* Just render a snapshot or the ID/Name for now to simulate the 'lift'. 
+                                             Rendering full cells is complex outside of table without breaking layout.
+                                             Let's render a nice 'summary' card style for the row. 
+                                         */}
+                                            <div className="flex gap-4">
+                                                <span className="font-bold">{activeItem.id}</span>
+                                                <span>{activeItem.vehicle}</span>
+                                                <span className="text-gray-400">{activeItem.category}</span>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        /* Column Drag Preview */
+                                        <div className="px-4 py-3 bg-gray-100 font-bold text-gray-700 border-b-2 border-blue-500">
+                                            {activeId}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : null}
+                        </DragOverlay>,
+                        document.body
+                    )}
                 </DndContext>
 
                 {/* Bottom Pagination Info */}

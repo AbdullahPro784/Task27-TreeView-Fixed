@@ -26,16 +26,20 @@ import {
     useSensor,
     useSensors,
     DragEndEvent,
+    DragOverlay, // Added
+    DragStartEvent, // Added
 } from "@dnd-kit/core";
+import { createPortal } from "react-dom"; // Added
 import {
     arrayMove,
     SortableContext,
     horizontalListSortingStrategy,
+    verticalListSortingStrategy,
     useSortable,
     sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { restrictToHorizontalAxis } from "@dnd-kit/modifiers";
+import { restrictToHorizontalAxis, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
     ChevronDown,
     ChevronUp,
@@ -64,6 +68,7 @@ import { Button } from "@/components/ui/button";
 import { Asset, AssetStatus, DATA } from "../data";
 import { cn } from "@/lib/utils";
 import { DraggableTableHeader } from "../DraggableTableHeader";
+import { DraggableRow } from "../DraggableRow";
 import { EditableCell } from "../EditableCell";
 
 import AddItemModal from "../AddItemModal";
@@ -79,7 +84,53 @@ export default function TableVariant2({ data: initialData }: { data: Asset[] }) 
         return Array.from(categories).sort();
     }, []);
 
-    const [data, setData] = useState(initialData);
+    // Helper to find item and its parent in the tree
+    const findItemPath = (items: Asset[], id: string): { parent: Asset | null, index: number, array: Asset[] } | null => {
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].id === id) {
+                return { parent: null, index: i, array: items };
+            }
+            if (items[i].subRows) {
+                const result = findItemPath(items[i].subRows!, id);
+                if (result) {
+                    if (result.parent === null) {
+                        return { parent: items[i], index: result.index, array: items[i].subRows! };
+                    }
+                    return result;
+                }
+            }
+        }
+        return null;
+    };
+
+    const [data, setData] = useState(() => {
+        if (typeof window !== "undefined") {
+            const savedData = localStorage.getItem("assetTableData_v2");
+            if (savedData) {
+                try {
+                    const parsed = JSON.parse(savedData);
+                    if (Array.isArray(parsed)) return parsed;
+                } catch (e) {
+                    console.error("Failed to parse saved data", e);
+                }
+            }
+            // Fallback for migration
+            const savedOrder = localStorage.getItem("assetTableRowOrder_v2");
+            if (savedOrder) {
+                try {
+                    const orderIds = JSON.parse(savedOrder) as string[];
+                    const orderMap = new Map(orderIds.map((id, index) => [id, index]));
+                    const sorted = [...initialData].sort((a, b) => {
+                        const indexA = orderMap.get(a.id) ?? Infinity;
+                        const indexB = orderMap.get(b.id) ?? Infinity;
+                        return indexA - indexB;
+                    });
+                    return sorted;
+                } catch (e) { }
+            }
+        }
+        return initialData;
+    });
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isColumnsMenuOpen, setIsColumnsMenuOpen] = useState(false);
 
@@ -103,19 +154,30 @@ export default function TableVariant2({ data: initialData }: { data: Asset[] }) 
     ]);
     const [rowSelection, setRowSelection] = useState({});
     const [expanded, setExpanded] = useState<ExpandedState>(true);
+    const [columnSizing, setColumnSizing] = useState({});
 
     // Load column order from local storage
     useEffect(() => {
-        const savedOrder = localStorage.getItem("assetTableColumnOrder_v2");
-        if (savedOrder) {
-            try {
-                const parsedOrder = JSON.parse(savedOrder);
-                if (!parsedOrder.includes("select")) {
-                    parsedOrder.unshift("select");
+        if (typeof window !== "undefined") {
+            const savedOrder = localStorage.getItem("assetTableColumnOrder_v2");
+            if (savedOrder) {
+                try {
+                    const parsedOrder = JSON.parse(savedOrder);
+                    if (!parsedOrder.includes("select")) {
+                        parsedOrder.unshift("select");
+                    }
+                    setColumnOrder(parsedOrder);
+                } catch (e) {
+                    console.error("Failed to parse column order", e);
                 }
-                setColumnOrder(parsedOrder);
-            } catch (e) {
-                console.error("Failed to parse column order", e);
+            }
+            const savedSizing = localStorage.getItem("assetTableColumnSizing_v2");
+            if (savedSizing) {
+                try {
+                    setColumnSizing(JSON.parse(savedSizing));
+                } catch (e) {
+                    console.error("Failed to parse column sizing", e);
+                }
             }
         }
     }, []);
@@ -124,6 +186,16 @@ export default function TableVariant2({ data: initialData }: { data: Asset[] }) 
     useEffect(() => {
         localStorage.setItem("assetTableColumnOrder_v2", JSON.stringify(columnOrder));
     }, [columnOrder]);
+
+    // Save full data structure to local storage
+    useEffect(() => {
+        localStorage.setItem("assetTableData_v2", JSON.stringify(data));
+    }, [data]);
+
+    // Save column sizing to local storage
+    useEffect(() => {
+        localStorage.setItem("assetTableColumnSizing_v2", JSON.stringify(columnSizing));
+    }, [columnSizing]);
 
     const columns = React.useMemo<ColumnDef<Asset>[]>(() => [
         {
@@ -280,6 +352,7 @@ export default function TableVariant2({ data: initialData }: { data: Asset[] }) 
             columnVisibility,
             globalFilter,
             expanded,
+            columnSizing,
         },
         onSortingChange: setSorting,
         onColumnFiltersChange: setColumnFilters,
@@ -287,6 +360,7 @@ export default function TableVariant2({ data: initialData }: { data: Asset[] }) 
         onColumnVisibilityChange: setColumnVisibility,
         onColumnOrderChange: setColumnOrder,
         onRowSelectionChange: setRowSelection,
+        onColumnSizingChange: setColumnSizing,
         onExpandedChange: setExpanded,
         getCoreRowModel: getCoreRowModel(),
         getSortedRowModel: getSortedRowModel(),
@@ -297,6 +371,8 @@ export default function TableVariant2({ data: initialData }: { data: Asset[] }) 
         autoResetPageIndex: false,
         enableRowSelection: true,
         enableMultiRowSelection: true,
+        columnResizeMode: "onChange",
+        enableColumnResizing: true,
         meta: {
             updateData: async (itemId: string, columnId: string, value: any) => {
                 // Mock update
@@ -323,20 +399,119 @@ export default function TableVariant2({ data: initialData }: { data: Asset[] }) 
     };
 
     const sensors = useSensors(
-        useSensor(PointerSensor),
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8,
+            },
+        }),
         useSensor(KeyboardSensor, {
             coordinateGetter: sortableKeyboardCoordinates,
         })
     );
 
+    const [activeId, setActiveId] = useState<string | null>(null);
+    const [activeItem, setActiveItem] = useState<Asset | null>(null);
+
+    function handleDragStart(event: DragStartEvent) {
+        setActiveId(event.active.id as string);
+        const currentActive = event.active;
+        if (currentActive.data.current?.type === 'row') {
+            const path = findItemPath(data, currentActive.id as string);
+            if (path) {
+                const item = path.array[path.index];
+                setActiveItem(item);
+            }
+        }
+    }
+
     function handleDragEnd(event: DragEndEvent) {
         const { active, over } = event;
-        if (active && over && active.id !== over.id) {
-            setColumnOrder((order) => {
-                const oldIndex = order.indexOf(active.id as string);
-                const newIndex = order.indexOf(over.id as string);
-                return arrayMove(order, oldIndex, newIndex);
-            });
+        setActiveId(null);
+        setActiveItem(null);
+        if (!over) return;
+
+        if (active.id !== over.id) {
+            const activeType = active.data.current?.type;
+
+            if (activeType === "column") {
+                setColumnOrder((order) => {
+                    const oldIndex = order.indexOf(active.id as string);
+                    const newIndex = order.indexOf(over.id as string);
+                    return arrayMove(order, oldIndex, newIndex);
+                });
+            } else if (activeType === "row") {
+                setData((prevData) => {
+                    const activePath = findItemPath(prevData, active.id as string);
+                    const overPath = findItemPath(prevData, over.id as string);
+
+                    if (!activePath || !overPath) return prevData;
+
+                    let effectiveOverPath = overPath;
+                    let effectiveNewIndex = overPath.index;
+                    let isProjected = false;
+
+                    const sameParent = activePath.array === overPath.array;
+
+                    if (!sameParent) {
+                        try {
+                            let current = overPath.parent;
+                            while (current) {
+                                if (activePath.array.includes(current)) {
+                                    effectiveOverPath = {
+                                        parent: null,
+                                        index: activePath.array.indexOf(current),
+                                        array: activePath.array
+                                    };
+                                    effectiveNewIndex = effectiveOverPath.index;
+                                    isProjected = true;
+                                    break;
+                                }
+                                const parentPath = findItemPath(prevData, current.id);
+                                if (parentPath && parentPath.parent) {
+                                    current = parentPath.parent;
+                                } else if (parentPath && parentPath.parent === null) {
+                                    if (activePath.array === prevData) {
+                                        break;
+                                    }
+                                    break;
+                                } else {
+                                    break;
+                                }
+                            }
+                        } catch (e) {
+                            console.error("Error projecting ancestor", e);
+                        }
+                    }
+
+                    if (activePath.array === effectiveOverPath.array) {
+                        const oldIndex = activePath.index;
+                        const newIndex = effectiveNewIndex;
+                        const newData = [...prevData];
+
+                        const updateRecursive = (items: Asset[]): Asset[] => {
+                            if (items === activePath.array) {
+                                return arrayMove(items, oldIndex, newIndex);
+                            }
+                            return items.map(item => {
+                                if (item.subRows) {
+                                    const updatedSubRows = updateRecursive(item.subRows);
+                                    if (updatedSubRows !== item.subRows) {
+                                        return { ...item, subRows: updatedSubRows };
+                                    }
+                                }
+                                return item;
+                            });
+                        };
+
+                        if (activePath.parent === null) {
+                            return arrayMove(prevData, oldIndex, newIndex);
+                        }
+
+                        return updateRecursive(newData);
+                    }
+                    return prevData;
+                });
+            }
         }
     }
 
@@ -368,7 +543,8 @@ export default function TableVariant2({ data: initialData }: { data: Asset[] }) 
 
             <DndContext
                 collisionDetection={closestCenter}
-                modifiers={[restrictToHorizontalAxis]}
+                // modifiers={[restrictToHorizontalAxis]}
+                onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
                 sensors={sensors}
             >
@@ -388,35 +564,64 @@ export default function TableVariant2({ data: initialData }: { data: Asset[] }) 
                                 </tr>
                             ))}
                         </thead>
-                        <tbody>
-                            {table.getRowModel().rows.map((row) => {
-                                return (
-                                    <tr
-                                        key={row.id}
-                                        onClick={() => row.toggleSelected()}
-                                        className={cn(
-                                            "border-b border-gray-100 cursor-pointer transition-colors relative",
-                                            // Depth based background
-                                            row.depth === 0 ? "bg-white" : row.depth === 1 ? "bg-gray-50" : "bg-gray-100",
-                                            "hover:bg-slate-100",
-                                            row.getIsSelected() ? "bg-blue-50 ring-1 ring-inset ring-blue-300" : "",
-                                            "h-14"
-                                        )}
-                                    >
-                                        {row.getVisibleCells().map((cell) => (
-                                            <td key={cell.id} className={cn("p-0 text-gray-700 relative",
-                                                // Add separator lines for cells if needed
-                                                // "border-r border-gray-50 last:border-0"
-                                            )}>
-                                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                            </td>
-                                        ))}
-                                    </tr>
-                                );
-                            })}
+                        <tbody className="divide-y divide-gray-100">
+                            <SortableContext
+                                items={table.getRowModel().rows.map(row => row.original.id)}
+                                strategy={verticalListSortingStrategy}
+                            >
+                                {table.getRowModel().rows.map((row) => {
+                                    return (
+                                        <DraggableRow
+                                            key={row.id}
+                                            rowId={row.original.id}
+                                            onClick={() => row.toggleSelected()}
+                                            className={cn(
+                                                "border-b border-gray-100 cursor-pointer transition-colors",
+                                                // Depth based background
+                                                row.depth === 0 ? "bg-white" : row.depth === 1 ? "bg-gray-50" : "bg-gray-100",
+                                                "hover:bg-slate-100",
+                                                row.getIsSelected() ? "bg-blue-50 ring-1 ring-inset ring-blue-300" : "",
+                                                "h-14"
+                                            )}
+                                        >
+                                            {row.getVisibleCells().map((cell) => (
+                                                <td key={cell.id} style={{ width: cell.column.getSize() }} className={cn("p-0 text-gray-700 relative")}>
+                                                    <div className="truncate w-full px-4" title={cell.getValue() as string}>
+                                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                                    </div>
+                                                </td>
+                                            ))}
+                                        </DraggableRow>
+                                    );
+                                })}
+                            </SortableContext>
                         </tbody>
                     </table>
                 </div>
+                {/* Drag Overlay Portal */}
+                {typeof window !== "undefined" && createPortal(
+                    <DragOverlay adjustScale={true}>
+                        {activeId ? (
+                            <div className="opacity-90 shadow-2xl cursor-grabbing transform rotate-2 bg-white border border-blue-500 rounded-md overflow-hidden">
+                                {/* Render simplified row or column preview */}
+                                {activeItem ? (
+                                    <div className="flex items-center h-14 px-4 bg-gray-50 text-sm font-medium text-gray-700">
+                                        <div className="flex gap-4">
+                                            <span className="font-bold">{activeItem.id}</span>
+                                            <span>{activeItem.vehicle}</span>
+                                            <span className="text-gray-400">{activeItem.category}</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="px-4 py-3 bg-gray-100 font-bold text-gray-700 border-b-2 border-blue-500">
+                                        {activeId}
+                                    </div>
+                                )}
+                            </div>
+                        ) : null}
+                    </DragOverlay>,
+                    document.body
+                )}
             </DndContext>
         </div>
     );

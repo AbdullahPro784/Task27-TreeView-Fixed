@@ -6,11 +6,15 @@ A powerful, high-performance data grid application built with **Next.js 14**, **
 
 -   **Advanced Data Grid**: Built on TanStack Table for headless, performant state management.
 -   **Tree Grid & Grouping**: Support for nested sub-rows (tree view) to display hierarchical asset data.
--   **Drag & Drop Columns**: Reorder columns intuitively using `@dnd-kit`.
+-   **Drag & Drop**:
+    -   **Column Reordering**: Intuitive column drag-and-drop using `@dnd-kit`.
+    -   **Row Reordering**: Reorder rows and sub-items via drag handle.
+-   **Sub-item Management**: easily add, edit, and organize sub-tasks directly within the grid.
 -   **Advanced Filtering**:
     -   **Summary Cards**: Filter by status (In Process, Delayed, Closed) with one click.
     -   **Global Search**: Real-time text search across all columns.
     -   **Status & Duration**: Dedicated dropdown filters for precise data slicing.
+-   **Data Persistence**: Automatically saves data, column order, and layout preferences to `LocalStorage`.
 -   **Multiple Visual Variants**:
     -   **Original**: Classic flat/tree table.
     -   **Variation 1**: Indented tree view.
@@ -54,8 +58,8 @@ The core implementation featuring the new **Summary Cards**, **Search Filter Bar
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/your-username/your-repo-name.git
-    cd your-repo-name
+    git clone https://github.com/AbdullahPro784/Task-23-new-grid-style.git
+    cd Task-23-new-grid-style
     ```
 
 2.  **Install dependencies**:
