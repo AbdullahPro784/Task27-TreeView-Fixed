@@ -46,6 +46,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { createPortal } from "react-dom";
 
 import { TREE_DATA, WorkItem } from "./treeData";
+import { TreeLines } from "./AssetTable/components/Row/TreeLines";
 import { cn } from "@/lib/utils";
 
 // --- Types ---
@@ -228,60 +229,14 @@ export default function TreeTable() {
         {
             accessorKey: "title",
             header: "Title",
-            cell: ({ row, getValue, table }) => {
-                // Calculate ancestors to determine guides
-                const guides = [];
-                let current = row.getParentRow();
-                while (current) {
-                    const parent = current.getParentRow();
-                    // Identify if 'current' is the last child of 'parent'
-                    // If root:
-                    const siblings = parent ? parent.original.children : table.options.data;
-                    const index = siblings?.findIndex(s => s.id === current?.original.id) ?? 0;
-                    const isLast = index === (siblings?.length ?? 0) - 1;
-
-                    guides.unshift(isLast ? "space" : "line");
-                    current = parent;
-                }
-
-                // Determine current row connector type
-                const parent = row.getParentRow();
-                const siblings = parent ? parent.original.children : table.options.data;
-                const index = siblings?.findIndex(s => s.id === row.original.id) ?? 0;
-                const isLast = index === (siblings?.length ?? 0) - 1;
-                const connector = isLast ? "last" : "entry";
-
+            cell: ({ row, getValue }) => {
                 return (
-                    <div className="flex items-stretch h-full">
-                        {/* Guides - Full Height, No Padding */}
-                        <div className="flex items-stretch shrink-0 font-mono">
-                            {/* Ancestor Guides */}
-                            {guides.map((type, i) => (
-                                <div key={i} className="w-6 flex justify-center relative" style={{ minWidth: '24px' }}>
-                                    {type === "line" && (
-                                        <div className="absolute top-0 bottom-0 w-px bg-blue-300 left-1/2"></div>
-                                    )}
-                                </div>
-                            ))}
-
-                            {/* Current Connection */}
-                            {row.depth > 0 && (
-                                <div className="w-6 flex justify-center relative" style={{ minWidth: '24px' }}>
-                                    <div className="absolute top-0 bottom-1/2 left-1/2 w-px bg-blue-300"></div>
-                                    {connector === "last" ? (
-                                        <div className="absolute top-1/2 left-1/2 w-1/2 h-1/2 border-l border-b border-blue-300 rounded-bl-lg -translate-x-px"></div>
-                                    ) : (
-                                        <>
-                                            <div className="absolute top-1/2 bottom-0 left-1/2 w-px bg-blue-300"></div>
-                                            <div className="absolute top-1/2 left-1/2 w-1/2 h-px bg-blue-300"></div>
-                                        </>
-                                    )}
-                                </div>
-                            )}
+                    <div className="relative h-full flex items-center">
+                        <div className="absolute left-0 top-0 bottom-0 pointer-events-none">
+                            <TreeLines row={row} lineColor="border-blue-300" indentSize={24} />
                         </div>
 
-                        {/* Content - With Padding */}
-                        <div className="flex items-center gap-2 pl-1 py-2 w-full min-w-0">
+                        <div className="flex items-center gap-2 py-2 w-full min-w-0" style={{ paddingLeft: `${row.depth * 24 + 4}px` }}>
                             {row.getCanExpand() ? (
                                 <button
                                     onClick={(e) => {

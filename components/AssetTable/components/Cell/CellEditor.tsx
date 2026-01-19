@@ -1,5 +1,18 @@
 import React, { useState, useEffect } from "react";
 
+
+import { cn } from "@/lib/utils";
+
+export interface EditableCellProps {
+    getValue: () => any;
+    row: any;
+    column: any;
+    table: any;
+    options?: string[];
+    type?: "text" | "date" | "select";
+    className?: string; // Add className prop for flexibility
+}
+
 export const EditableCell = ({
     getValue,
     row,
@@ -7,14 +20,8 @@ export const EditableCell = ({
     table,
     options,
     type = "text",
-}: {
-    getValue: () => any;
-    row: any;
-    column: any;
-    table: any;
-    options?: string[];
-    type?: "text" | "date" | "select";
-}) => {
+    className,
+}: EditableCellProps) => {
     const initialValue = getValue();
     const [value, setValue] = useState(initialValue ?? "");
     const [isEditing, setIsEditing] = useState(false);
@@ -33,6 +40,7 @@ export const EditableCell = ({
             // Strict ISO format check (YYYY-MM-DD)
             const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
             if (!isoDateRegex.test(currentValue)) {
+                // Ideally use a toast instead of alert, but alert matches previous impl
                 alert("Invalid date value. Please ensure date is selected correctly.");
                 setValue(initialValue ?? "");
                 setIsEditing(false);
@@ -78,6 +86,7 @@ export const EditableCell = ({
     };
 
     const onBlur = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) => {
+        // Delay to allow key events to trigger first
         if (!saveInitiated.current) {
             handleSave(e.target.value);
         }
@@ -86,7 +95,33 @@ export const EditableCell = ({
     if (isEditing) {
         if (options) {
             return (
-                <select
+                <div className={cn("w-full h-full p-1", className)}>
+                    <select
+                        value={value}
+                        onChange={(e) => setValue(e.target.value)}
+                        onBlur={onBlur}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSave(e.currentTarget.value);
+                            else if (e.key === "Escape") {
+                                setValue(initialValue ?? "");
+                                setIsEditing(false);
+                            }
+                        }}
+                        autoFocus
+                        className="w-full h-full px-2 py-1 bg-white border border-orange-500 rounded focus:outline-none text-sm"
+                    >
+                        {options.map((opt) => (
+                            <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                    </select>
+                </div>
+            );
+        }
+
+        return (
+            <div className={cn("w-full h-full p-1", className)}>
+                <input
+                    type={type}
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
                     onBlur={onBlur}
@@ -98,33 +133,10 @@ export const EditableCell = ({
                         }
                     }}
                     autoFocus
-                    className="w-full h-full px-4 py-3 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                    style={{ margin: 0, border: 'none' }}
-                >
-                    {options.map((opt) => (
-                        <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                </select>
-            );
-        }
-
-        return (
-            <input
-                type={type} // Use the passed type (e.g. "date")
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                onBlur={onBlur}
-                onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSave(e.currentTarget.value);
-                    else if (e.key === "Escape") {
-                        setValue(initialValue ?? "");
-                        setIsEditing(false);
-                    }
-                }}
-                autoFocus
-                className="w-full h-full px-4 py-3 bg-transparent focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent font-sans"
-                style={{ margin: 0, border: 'none' }}
-            />
+                    className="w-full h-full px-2 py-1 bg-white border border-orange-500 rounded focus:outline-none text-sm font-sans"
+                    min={type === 'date' ? "2024-01-01" : undefined}
+                />
+            </div>
         );
     }
 
@@ -139,8 +151,16 @@ export const EditableCell = ({
     }
 
     return (
-        <div onDoubleClick={() => setIsEditing(true)} className="cursor-text w-full h-full px-4 py-3 flex items-center">
-            {displayValue}
+        <div
+            onDoubleClick={() => setIsEditing(true)}
+            className={cn(
+                "cursor-text w-full h-full px-4 py-3 flex items-center truncate",
+                !value && "text-gray-400 italic", // Grey out empty values
+                className
+            )}
+            title={displayValue}
+        >
+            {displayValue || "-"}
         </div>
     );
 };

@@ -17,7 +17,7 @@ import {
     ExpandedState,
     getExpandedRowModel,
 } from "@tanstack/react-table";
-import { StatusEditableCell } from "../StatusEditableCell";
+import { StatusEditableCell } from "../AssetTable/components/Cell/StatusEditableCell";
 import {
     DndContext,
     closestCenter,
@@ -65,13 +65,13 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { Asset, AssetStatus, DATA } from "../data";
+import { Asset, AssetStatus, DATA } from "../AssetTable/utils/data";
 import { cn } from "@/lib/utils";
-import { DraggableTableHeader } from "../DraggableTableHeader";
-import { DraggableRow } from "../DraggableRow";
-import { EditableCell } from "../EditableCell";
+import { DraggableTableHeader } from "../AssetTable/components/Header/TableHeader";
+import { DraggableRow } from "../AssetTable/components/Row/TableRow";
+import { EditableCell } from "../AssetTable/components/Cell/CellEditor";
 
-import AddItemModal from "../AddItemModal";
+import AddItemModal from "../AssetTable/components/Modals/AddItemModal";
 import Link from "next/link";
 
 // --- Main Component ---
@@ -573,6 +573,7 @@ export default function TableVariant2({ data: initialData }: { data: Asset[] }) 
                                     return (
                                         <DraggableRow
                                             key={row.id}
+                                            row={row} // Added row prop to fix regression
                                             rowId={row.original.id}
                                             onClick={() => row.toggleSelected()}
                                             className={cn(

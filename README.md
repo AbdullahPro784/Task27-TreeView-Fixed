@@ -1,30 +1,45 @@
 # Advanced Asset Management Grid
 
-A powerful, high-performance data grid application built with **Next.js 14**, **Tailwind CSS**, and **TanStack Table**. This project demonstrates advanced table features including tree-grid structures, drag-and-drop column reordering, custom filtering, and multiple visualization variants.
+A powerful, high-performance data grid application built with **Next.js 14**, **Tailwind CSS**, and **TanStack Table**. This project demonstrates advanced table features including tree-grid structures, drag-and-drop column reordering, custom filtering, and a modular component architecture.
 
 ## 🚀 Features
 
--   **Advanced Data Grid**: Built on TanStack Table for headless, performant state management.
--   **Tree Grid & Grouping**: Support for nested sub-rows (tree view) to display hierarchical asset data.
+-   **Modular Architecture**: Fully refactored codebase with distinct Header, Row, Cell, and Panel components.
+-   **Advanced Tree Grid**: Support for nested sub-rows (tree view) with recursive indentation and visual guide lines (`TreeLines`).
+-   **High Performance**: Virtualized rows (`useVirtualization`) for handling large datasets efficiently.
 -   **Drag & Drop Ecosystem**:
-    -   **Reorder Sorting**: Drag items between rows to reorder them; numbering (e.g., 1.1, 1.2) updates automatically.
-    -   **Smart Grouping**: Drag an item **onto** another to create a new Group node containing both items.
-    -   **Column Reordering**: Intuitive column drag-and-drop using `@dnd-kit`.
--   **Visual Guides**: Clear, continuous blue indentation lines for tracking complex hierarchies.
--   **Sub-item Management**: easily add, edit, and organize sub-tasks directly within the grid.
--   **Advanced Filtering**:
-    -   **Summary Cards**: Filter by status (In Process, Delayed, Closed) with one click.
-    -   **Global Search**: Real-time text search across all columns.
-    -   **Status & Duration**: Dedicated dropdown filters for precise data slicing.
--   **Data Persistence**: Automatically saves data, column order, and layout preferences to `LocalStorage`.
--   **Multiple Visual Variants**:
-    -   **Original**: Classic flat/tree table.
-    -   **Variation 1**: Indented tree view.
-    -   **Variation 2**: Nested grid with guide lines.
-    -   **Variation 3**: Master-Detail panel view.
-    -   **Tree View**: Dedicated, highly visual hierarchical view with advanced spacing and connectors.
--   **Editable Cells**: Inline editing capabilities for quick data updates.
--   **Smart Status Logic**: Automatically highlights overdue items and visualizes status states.
+    -   **Row Reordering**: Drag items to reorder using `@dnd-kit`.
+    -   **Column Reordering**: Intuitive column drag-and-drop.
+-   **Rich Cell Features**:
+    -   **Sparklines**: Mini-charts (`CellSparkline`) embedded directly in cells.
+    -   **Inline Editing**: Support for direct data manipulation within the grid.
+    -   **Comments**: Hover-based annotation threads (`CellComments`).
+-   **Comprehensive Toolbar**:
+    -   **Global Search**: Fuzzy search across all levels.
+    -   **Pivot Mode**: Toggle for aggregation views.
+    -   **Export**: Built-in support for Excel/CSV/PDF export.
+-   **Interactive Panels**:
+    -   **Status Bar**: Real-time component showing selection summaries (Sum, Avg).
+    -   **Filter Panel**: Advanced sidebar filtering options.
+    -   **Summary Cards**: Quick-access KPI cards for data filtering.
+-   **Visual Variants**: Multiple table variations including Master-Detail and Pinned Rows.
+
+## 📂 Component Structure
+
+The project follows a strict modular structure for the `AssetTable`:
+
+```text
+components/AssetTable/
+├── components/
+│   ├── Cell/       # Cell renderers (Sparkline, Editor, Expander)
+│   ├── Header/     # Column headers, filtering, resizing
+│   ├── Modals/     # Add Item, Chart Modals
+│   ├── Panels/     # Sidebar, FilterPanel, StatusBar
+│   ├── Row/        # Row logic, TreeLines, Pinned Rows
+│   └── Toolbar/    # Search, Export, View Toggles
+├── hooks/          # Custom hooks (useTableEngine, useVirtualization)
+└── utils/          # Data transformation and helpers
+```
 
 ## 🛠️ Tech Stack
 
@@ -35,31 +50,27 @@ A powerful, high-performance data grid application built with **Next.js 14**, **
 -   **Drag & Drop**: dnd-kit
 -   **Language**: TypeScript
 
-## 📸 Previews
+## 📸 Screenshots
 
-### 1. Landing Page & Variation Selection
-Choose between different table visualizations to best suit your data needs.
-![Landing Page](screenshots/preview1.png)
+### 1. Main Grid View
+*Overview of the main Asset Table with tree structure.*
+![Main Grid View](screenshots/main_grid_view.png)
 
-### 2. Variation 1: Classic Tree View
-Standard indented hierarchy for clear parent-child relationships.
-![Variation 1](screenshots/preview2.png)
+### 2. Tree Guide Lines
+*Visual guide lines showing hierarchical relationships.*
+![Tree Guide Lines](screenshots/tree_guide_lines.png)
 
-### 3. Tree View (New)
-Advanced hierarchical view with continuous visual guides and smart grouping capabilities.
-![Tree View](screenshots/tree_view_preview.png)
+### 3. Sparklines & Rich Cells
+*Embedded charts and interactive cell components.*
+![Sparklines](screenshots/cell_features.png)
 
-### 4. Variation 2: Nested Grid
-Structured grid layout with visual guides for deep nesting.
-![Variation 2](screenshots/preview3.png)
+### 4. Filter Panel & Sidebar
+*Advanced filtering controls and sidebar navigation.*
+![Filter Panel](screenshots/filter_panel.png)
 
-### 5. Variation 3: Master-Detail Panels
-Full-width sub-panels for expanding detailed asset information.
-![Variation 3](screenshots/preview4.png)
-
-### 6. Original Variant with Advanced Filters
-The core implementation featuring the new **Summary Cards**, **Search Filter Bar**, and **Pagination**.
-![Original Variant](screenshots/preview5.png)
+### 5. Column Management
+*Column reordering and visibility controls.*
+![Column Management](screenshots/column_management.png)
 
 ## 📦 Getting Started
 

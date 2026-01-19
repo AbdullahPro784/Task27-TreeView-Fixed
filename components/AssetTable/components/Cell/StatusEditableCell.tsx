@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Wrench, HardHat, Settings, CheckCircle } from "lucide-react";
-import { AssetStatus } from "./data";
+import { AssetStatus } from "../../utils/data";
 
 export const StatusEditableCell = ({
     getValue,

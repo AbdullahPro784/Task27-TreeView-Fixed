@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { DATA } from "../components/data";
+import { DATA } from "../components/AssetTable/utils/data";
 
 const prisma = new PrismaClient();
 

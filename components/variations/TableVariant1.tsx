@@ -17,7 +17,8 @@ import {
     ExpandedState,
     getExpandedRowModel,
 } from "@tanstack/react-table";
-import { StatusEditableCell } from "../StatusEditableCell";
+import { TreeLines } from "../AssetTable/components/Row/TreeLines";
+import { StatusEditableCell } from "../AssetTable/components/Cell/StatusEditableCell";
 import {
     DndContext,
     closestCenter,
@@ -64,13 +65,16 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { Asset, AssetStatus, DATA } from "../data";
+import { Asset, AssetStatus, DATA } from "../AssetTable/utils/data";
 import { cn } from "@/lib/utils";
-import { DraggableTableHeader } from "../DraggableTableHeader";
-import { DraggableRow } from "../DraggableRow";
-import { EditableCell } from "../EditableCell";
+import { DraggableTableHeader } from "../AssetTable/components/Header/TableHeader";
+import { DraggableRow } from "../AssetTable/components/Row/TableRow";
+import { EditableCell } from "../AssetTable/components/Cell/CellEditor";
+import { Expander } from "../AssetTable/components/Cell/Expander"; // NEW
+import { TableCell } from "../AssetTable/components/Cell/TableCell"; // NEW
+import { CellSparkline } from "../AssetTable/components/Cell/CellSparkline"; // NEW
 
-import AddItemModal from "../AddItemModal";
+import AddItemModal from "../AssetTable/components/Modals/AddItemModal";
 import Link from "next/link";
 
 // --- Main Component ---
@@ -159,6 +163,7 @@ export default function TableVariant1({ data: initialData }: { data: Asset[] }) 
         "type",
         "vehicle",
         "status",
+        "activity", // NEW
     ]);
     const [rowSelection, setRowSelection] = useState({});
     const [expanded, setExpanded] = useState<ExpandedState>(true);
@@ -238,63 +243,18 @@ export default function TableVariant1({ data: initialData }: { data: Asset[] }) 
             accessorKey: "id",
             header: "Asset ID",
             cell: ({ row, getValue, table }) => {
-                const guides = [];
-                let current = row.getParentRow();
-                while (current) {
-                    const parent = current.getParentRow();
-                    const siblings = parent ? parent.original.subRows : table.options.data;
-                    const index = siblings?.findIndex((s: Asset) => s.id === current?.original.id) ?? 0;
-                    const isLast = index === (siblings?.length ?? 0) - 1;
-                    guides.unshift(isLast ? "space" : "line");
-                    current = parent;
-                }
-
-                const parent = row.getParentRow();
-                const siblings = parent ? parent.original.subRows : table.options.data;
-                const index = siblings?.findIndex((s: Asset) => s.id === row.original.id) ?? 0;
-                const isLast = index === (siblings?.length ?? 0) - 1;
-                const connector = isLast ? "last" : "entry";
-
                 return (
-                    <div className="flex items-stretch h-full">
-                        <div className="flex items-stretch shrink-0 font-mono">
-                            {guides.map((type, i) => (
-                                <div key={i} className="w-5 flex justify-center relative" style={{ minWidth: '20px' }}>
-                                    {type === "line" && (
-                                        <div className="absolute top-0 bottom-0 w-px bg-blue-300 left-1/2"></div>
-                                    )}
-                                </div>
-                            ))}
-                            {row.depth > 0 && (
-                                <div className="w-5 flex justify-center relative" style={{ minWidth: '20px' }}>
-                                    <div className="absolute top-0 bottom-1/2 left-1/2 w-px bg-blue-300"></div>
-                                    {connector === "last" ? (
-                                        <div className="absolute top-1/2 left-1/2 w-1/2 h-1/2 border-l border-b border-blue-300 rounded-bl-lg -translate-x-px"></div>
-                                    ) : (
-                                        <>
-                                            <div className="absolute top-1/2 bottom-0 left-1/2 w-px bg-blue-300"></div>
-                                            <div className="absolute top-1/2 left-1/2 w-1/2 h-px bg-blue-300"></div>
-                                        </>
-                                    )}
-                                </div>
-                            )}
+                    <div className="relative h-full flex items-center">
+                        <div className="absolute left-0 top-0 bottom-0 pointer-events-none">
+                            <TreeLines row={row} lineColor="border-blue-300" />
                         </div>
 
-                        <div className="flex items-center gap-2 pl-1 py-2 w-full min-w-0">
+                        <div
+                            className="flex items-center gap-2 py-2 w-full min-w-0"
+                            style={{ paddingLeft: `${row.depth * 20 + 4}px` }}
+                        >
                             {row.getCanExpand() && (
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        row.toggleExpanded();
-                                    }}
-                                    className="p-1 hover:bg-blue-50 rounded cursor-pointer transition-transform text-blue-500"
-                                >
-                                    {row.getIsExpanded() ? (
-                                        <ChevronDown size={16} />
-                                    ) : (
-                                        <ChevronRight size={16} />
-                                    )}
-                                </button>
+                                <Expander row={row} />
                             )}
                             {getValue() as string}
                         </div>
@@ -379,6 +339,16 @@ export default function TableVariant1({ data: initialData }: { data: Asset[] }) 
             header: "Status",
             size: 180,
             cell: StatusEditableCell,
+        },
+        {
+            id: "activity",
+            header: "Activity",
+            size: 120,
+            cell: () => (
+                <TableCell>
+                    <CellSparkline data={[10, 20, 15, 25, 30, 20, 40]} />
+                </TableCell>
+            )
         },
     ], [uniqueCategories]);
 
@@ -644,6 +614,7 @@ export default function TableVariant1({ data: initialData }: { data: Asset[] }) 
                                     return (
                                         <DraggableRow
                                             key={row.id}
+                                            row={row} // Added row prop to fix regression
                                             rowId={row.original.id} // Use original ID for handling data update? OR row.id (which might be hierarchical)? data update uses original ID.
                                             // DraggableRow uses ID for Sortable. SortableContext must match.
                                             // If row.id is "0.1", but our data has "id-123", we need to align.

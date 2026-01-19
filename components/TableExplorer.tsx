@@ -7,7 +7,7 @@ import TableVariant1 from "./variations/TableVariant1";
 import TableVariant2 from "./variations/TableVariant2";
 import TableVariant3 from "./variations/TableVariant3";
 import TreeTable from "./TreeTable";
-import { Asset } from "./data";
+import { Asset } from "./AssetTable/utils/data";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";

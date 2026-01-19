@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { ArrowRight, LayoutList, ListTree, TableProperties, FileText } from "lucide-react";
 import { db } from "@/lib/db";
-import { Asset } from "@/components/data";
+import { Asset } from "@/components/AssetTable/utils/data";
 import TableExplorer from "@/components/TableExplorer";
+
 
 async function getAssets(): Promise<Asset[]> {
   const items: any[] = await db.item.findMany({

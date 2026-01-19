@@ -1,0 +1,45 @@
+
+/* styles.module.css */
+
+.tableContainer {
+    /* Custom scrollbar styling for enterprise feel */
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+}
+
+.tableContainer::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.tableContainer::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.tableContainer::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 20px;
+}
+
+.tableContainer::-webkit-scrollbar-thumb:hover {
+    background-color: #94a3b8;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.fadeInRow {
+    animation: fadeIn 0.2s ease-out forwards;
+}
+
+/* Tree Line Connectors (Optional helper classes if needed alongside inline styles) */
+.treeConnector {
+    border-left: 2px solid #e2e8f0;
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+}
