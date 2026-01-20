@@ -76,8 +76,8 @@ components/AssetTable/
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/AbdullahPro784/Task-25-tree-view
-    cd Task-25-tree-view
+    git clone https://github.com/AbdullahPro784/Task27-TreeView-Fixed
+    cd Task27-TreeView-Fixed
     ```
 
 2.  **Install dependencies**:
